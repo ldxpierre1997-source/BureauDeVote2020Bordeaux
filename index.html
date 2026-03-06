@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Municipales 2020 — Bordeaux</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family:'Inter',sans-serif; background:#f7f5f2; color:#1c1917; height:100vh; display:flex; flex-direction:row; overflow:hidden; }
+
+  /* ── Sidebar desktop ── */
+  .sidebar { width:210px; flex-shrink:0; background:#fff; border-right:1px solid #e5e0d8; display:flex; flex-direction:column; z-index:1000; padding:20px 16px 24px; }
+  .sidebar-title { font-family:'Playfair Display',serif; font-size:1.05rem; color:#1c1917; line-height:1.3; margin-bottom:4px; }
+  .sidebar-sub { font-size:0.68rem; color:#a8a29e; margin-bottom:24px; line-height:1.5; }
+  .sidebar-section-label { font-size:0.62rem; font-weight:600; text-transform:uppercase; letter-spacing:0.12em; color:#a8a29e; margin-bottom:10px; }
+
+  .cand-btn { display:flex; flex-direction:column; gap:3px; padding:11px 13px; border-radius:10px; border:1.5px solid #e5e0d8; background:#fafaf9; cursor:pointer; margin-bottom:8px; transition:all 0.16s ease; text-align:left; position:relative; overflow:hidden; }
+  .cand-btn::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--cand-color); opacity:0; transition:opacity 0.16s; }
+  .cand-btn:hover { border-color:var(--cand-color); background:var(--cand-bg); }
+  .cand-btn.active { border-color:var(--cand-color); background:var(--cand-bg); }
+  .cand-btn.active::before { opacity:1; }
+  .cand-btn-name { font-size:0.8rem; font-weight:600; color:#1c1917; transition:color 0.16s; }
+  .cand-btn.active .cand-btn-name, .cand-btn:hover .cand-btn-name { color:var(--cand-color); }
+  .cand-btn-sub { font-size:0.62rem; color:#a8a29e; line-height:1.3; }
+  .cand-btn-bar { margin-top:5px; height:4px; border-radius:2px; width:100%; background:linear-gradient(to right, var(--cand-c1), var(--cand-c2), var(--cand-c3)); opacity:0.4; transition:opacity 0.16s; }
+  .cand-btn.active .cand-btn-bar, .cand-btn:hover .cand-btn-bar { opacity:1; }
+
+  .sidebar-spacer { flex:1; }
+  .sidebar-note { font-size:0.6rem; color:#c0bab3; line-height:1.5; border-top:1px solid #f0ede8; padding-top:12px; }
+
+  /* ── Mobile : tabs en bas ── */
+  @media (max-width: 640px) {
+    body { flex-direction:column; }
+    .sidebar {
+      width:100%; height:auto; flex-direction:row; order:2;
+      border-right:none; border-top:1px solid #e5e0d8;
+      padding:8px 8px 14px; gap:6px; overflow-x:auto;
+      -webkit-overflow-scrolling:touch; flex-shrink:0;
+    }
+    .sidebar-title, .sidebar-sub, .sidebar-section-label, .sidebar-spacer, .sidebar-note { display:none; }
+    .cand-btn { flex:1; min-width:72px; margin-bottom:0; padding:8px 6px 10px; border-radius:10px; gap:1px; align-items:center; text-align:center; }
+    .cand-btn::before { width:100%; height:3px; top:auto; bottom:0; left:0; right:0; border-radius:2px 2px 0 0; }
+    .cand-btn-name { font-size:0.72rem; }
+    .cand-btn-sub, .cand-btn-bar { display:none; }
+    #map-container { flex:1; order:1; min-height:0; }
+    .info-panel { top:8px; right:8px; left:8px; max-width:none; min-width:0; bottom:auto; }
+    .legend { bottom:80px; left:8px; min-width:140px; }
+  }
+
+  #map-container { flex:1; position:relative; overflow:hidden; }
+  #map { width:100%; height:100%; }
+
+  .legend { position:absolute; bottom:24px; left:24px; background:rgba(255,255,255,0.95); border:1px solid #e5e0d8; box-shadow:0 4px 20px rgba(0,0,0,0.08); padding:12px 16px; border-radius:10px; z-index:900; min-width:180px; }
+  .legend-title { font-size:0.65rem; font-weight:600; text-transform:uppercase; letter-spacing:0.1em; color:#78716c; margin-bottom:8px; }
+  .legend-gradient { width:100%; height:7px; border-radius:4px; margin-bottom:5px; }
+  .legend-labels { display:flex; justify-content:space-between; font-size:0.61rem; color:#a8a29e; }
+
+  .info-panel { position:absolute; top:16px; right:16px; background:rgba(255,255,255,0.97); border:1px solid #e5e0d8; box-shadow:0 4px 20px rgba(0,0,0,0.08); padding:14px 18px; border-radius:12px; z-index:900; min-width:210px; max-width:250px; }
+  .info-panel-title { font-size:0.65rem; font-weight:600; text-transform:uppercase; letter-spacing:0.1em; color:#78716c; margin-bottom:11px; }
+  .info-cand-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; gap:8px; }
+  .info-cand-name { font-size:0.73rem; font-weight:500; color:#44403c; flex:1; }
+  .info-cand-bar-wrap { flex:1.4; background:#f5f0eb; border-radius:3px; height:5px; overflow:hidden; }
+  .info-cand-bar { height:100%; border-radius:3px; transition:width 0.3s ease; }
+  .info-cand-pct { font-size:0.7rem; font-weight:600; min-width:34px; text-align:right; }
+  .info-divider { border:none; border-top:1px solid #e5e0d8; margin:9px 0; }
+  .info-stat { display:flex; justify-content:space-between; font-size:0.68rem; color:#78716c; margin-top:3px; }
+  .info-stat strong { color:#44403c; }
+  .info-placeholder { font-size:0.73rem; color:#a8a29e; font-style:italic; text-align:center; padding:6px 0; }
+
+  .leaflet-tooltip.ctip { background:#fff; border:1px solid #e5e0d8; border-radius:8px; padding:7px 11px; box-shadow:0 4px 16px rgba(0,0,0,0.1); font-family:'Inter',sans-serif; font-size:0.72rem; color:#44403c; white-space:nowrap; }
+  .leaflet-tooltip.ctip::before { display:none; }
+  .leaflet-control-zoom { border:1px solid #e5e0d8 !important; border-radius:8px !important; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.06) !important; }
+  .leaflet-control-zoom a { background:#fff !important; color:#44403c !important; border-bottom:1px solid #e5e0d8 !important; }
+  .leaflet-control-zoom a:hover { background:#f7f5f2 !important; }
+  .leaflet-control-attribution { background:rgba(255,255,255,0.7) !important; color:#a8a29e !important; font-size:0.6rem !important; }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-title">Municipales 2020<br>Bordeaux</div>
+  <div class="sidebar-sub">Tour 1 · par centre de vote</div>
+  <div class="sidebar-section-label">Candidat</div>
+
+  <button class="cand-btn active" data-cand="hurmic"
+    style="--cand-color:#15803d;--cand-bg:#f0fdf4;--cand-c1:#dcfce7;--cand-c2:#4ade80;--cand-c3:#15803d">
+    <div class="cand-btn-name">Pierre Hurmic</div>
+    <div class="cand-btn-sub">Union de la Gauche</div>
+    <div class="cand-btn-bar"></div>
+  </button>
+
+  <button class="cand-btn" data-cand="florian"
+    style="--cand-color:#1d4ed8;--cand-bg:#eff6ff;--cand-c1:#dbeafe;--cand-c2:#60a5fa;--cand-c3:#1d4ed8">
+    <div class="cand-btn-name">Nicolas Florian</div>
+    <div class="cand-btn-sub">Droite</div>
+    <div class="cand-btn-bar"></div>
+  </button>
+
+  <button class="cand-btn" data-cand="poutou"
+    style="--cand-color:#b91c1c;--cand-bg:#fff5f5;--cand-c1:#fee2e2;--cand-c2:#f87171;--cand-c3:#b91c1c">
+    <div class="cand-btn-name">Philippe Poutou</div>
+    <div class="cand-btn-sub">NPA / LFI</div>
+    <div class="cand-btn-bar"></div>
+  </button>
+
+  <button class="cand-btn" data-cand="paluteau"
+    style="--cand-color:#44403c;--cand-bg:#fafaf9;--cand-c1:#e7e5e4;--cand-c2:#78716c;--cand-c3:#292524">
+    <div class="cand-btn-name">Bruno Paluteau</div>
+    <div class="cand-btn-sub">Rassemblement National</div>
+    <div class="cand-btn-bar"></div>
+  </button>
+
+  <div style="border-top:1px solid #f0ede8;margin:4px 0 12px"></div>
+  <div class="sidebar-section-label">Vue synthèse</div>
+
+  <button class="cand-btn" data-cand="territoires"
+    style="--cand-color:#6d28d9;--cand-bg:#f5f3ff;--cand-c1:#ede9fe;--cand-c2:#a78bfa;--cand-c3:#6d28d9">
+    <div class="cand-btn-name">Territoires</div>
+    <div class="cand-btn-sub">Candidat en tête par zone</div>
+    <div class="cand-btn-bar"></div>
+  </button>
+
+  <div class="sidebar-spacer"></div>
+  <div class="sidebar-note">39 centres de vote · Données réelles · Source : Bordeaux open data</div>
+</div>
+
+<div id="map-container">
+  <div id="map"></div>
+  <div class="legend" id="legend-box">
+    <div class="legend-title" id="legend-title"></div>
+    <div class="legend-gradient" id="legend-gradient"></div>
+    <div class="legend-labels"><span>0 %</span><span id="leg-max"></span></div>
+  </div>
+  <div class="info-panel" id="info-panel">
+    <div class="info-panel-title">Centre de vote</div>
+    <div class="info-placeholder">Survolez un point</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+window.addEventListener('load', function() {
+
+const bureaux = [{"nom":"Achard","lat":44.8715348,"lon":-0.5486222,"nb_inscrits":3098,"nb_votants":1092,"nb_exprimes":1076,"participation":35.2,"hurmic":448,"hurmic_pct":41.6,"florian":292,"florian_pct":27.1,"poutou":147,"poutou_pct":13.7,"paluteau":55,"paluteau_pct":5.1},{"nom":"Albert Schweitzer","lat":44.8629698,"lon":-0.5809365,"nb_inscrits":3387,"nb_votants":743,"nb_exprimes":711,"participation":21.9,"hurmic":160,"hurmic_pct":22.5,"florian":244,"florian_pct":34.3,"poutou":132,"poutou_pct":18.6,"paluteau":71,"paluteau_pct":10.0},{"nom":"Alphonse Dupeux","lat":44.8308928,"lon":-0.5887583,"nb_inscrits":3603,"nb_votants":1452,"nb_exprimes":1436,"participation":40.3,"hurmic":558,"hurmic_pct":38.9,"florian":450,"florian_pct":31.3,"poutou":136,"poutou_pct":9.5,"paluteau":35,"paluteau_pct":2.4},{"nom":"Athénée","lat":44.8395358,"lon":-0.5771756,"nb_inscrits":0,"nb_votants":0,"nb_exprimes":516,"participation":0,"hurmic":162,"hurmic_pct":31.4,"florian":214,"florian_pct":41.5,"poutou":43,"poutou_pct":8.3,"paluteau":11,"paluteau_pct":2.1},{"nom":"Cocteau","lat":44.8476196,"lon":-0.6013565,"nb_inscrits":0,"nb_votants":0,"nb_exprimes":1740,"participation":0,"hurmic":357,"hurmic_pct":20.5,"florian":955,"florian_pct":54.9,"poutou":67,"poutou_pct":3.9,"paluteau":49,"paluteau_pct":2.8},{"nom":"Dupaty","lat":44.8601618,"lon":-0.5609455,"nb_inscrits":4556,"nb_votants":1501,"nb_exprimes":1477,"participation":32.9,"hurmic":518,"hurmic_pct":35.1,"florian":502,"florian_pct":34.0,"poutou":211,"poutou_pct":14.3,"paluteau":41,"paluteau_pct":2.8},{"nom":"Henri IV","lat":44.832432,"lon":-0.5760827,"nb_inscrits":3520,"nb_votants":1262,"nb_exprimes":1240,"participation":35.9,"hurmic":510,"hurmic_pct":41.1,"florian":338,"florian_pct":27.3,"poutou":191,"poutou_pct":15.4,"paluteau":24,"paluteau_pct":1.9},{"nom":"Jules Ferry","lat":44.8429846,"lon":-0.6060763,"nb_inscrits":4327,"nb_votants":1867,"nb_exprimes":1849,"participation":43.1,"hurmic":478,"hurmic_pct":25.9,"florian":902,"florian_pct":48.8,"poutou":103,"poutou_pct":5.6,"paluteau":73,"paluteau_pct":3.9},{"nom":"Mably","lat":44.8432884,"lon":-0.576669,"nb_inscrits":2759,"nb_votants":1040,"nb_exprimes":1021,"participation":37.7,"hurmic":297,"hurmic_pct":29.1,"florian":438,"florian_pct":42.9,"poutou":72,"poutou_pct":7.1,"paluteau":16,"paluteau_pct":1.6},{"nom":"Nuits","lat":44.8420114,"lon":-0.5529121,"nb_inscrits":3346,"nb_votants":1210,"nb_exprimes":1192,"participation":36.2,"hurmic":552,"hurmic_pct":46.3,"florian":258,"florian_pct":21.6,"poutou":173,"poutou_pct":14.5,"paluteau":39,"paluteau_pct":3.3},{"nom":"Hôtel de Ville","lat":44.8378837,"lon":-0.5791714,"nb_inscrits":1528,"nb_votants":474,"nb_exprimes":465,"participation":31.0,"hurmic":163,"hurmic_pct":35.1,"florian":164,"florian_pct":35.3,"poutou":49,"poutou_pct":10.5,"paluteau":15,"paluteau_pct":3.2},{"nom":"Lagrange","lat":44.850768,"lon":-0.5832395,"nb_inscrits":4546,"nb_votants":1798,"nb_exprimes":1771,"participation":39.6,"hurmic":516,"hurmic_pct":29.1,"florian":737,"florian_pct":41.6,"poutou":140,"poutou_pct":7.9,"paluteau":31,"paluteau_pct":1.8},{"nom":"Somme","lat":44.8184161,"lon":-0.571977,"nb_inscrits":4485,"nb_votants":1775,"nb_exprimes":1747,"participation":39.6,"hurmic":714,"hurmic_pct":40.9,"florian":496,"florian_pct":28.4,"poutou":243,"poutou_pct":13.9,"paluteau":45,"paluteau_pct":2.6},{"nom":"Raymond Poincaré","lat":44.8445382,"lon":-0.6193608,"nb_inscrits":5550,"nb_votants":1930,"nb_exprimes":1906,"participation":34.8,"hurmic":504,"hurmic_pct":26.4,"florian":853,"florian_pct":44.8,"poutou":147,"poutou_pct":7.7,"paluteau":78,"paluteau_pct":4.1},{"nom":"Stéhélin","lat":44.8556232,"lon":-0.6245196,"nb_inscrits":6597,"nb_votants":2368,"nb_exprimes":2315,"participation":35.9,"hurmic":572,"hurmic_pct":24.7,"florian":1088,"florian_pct":47.0,"poutou":172,"poutou_pct":7.4,"paluteau":92,"paluteau_pct":4.0},{"nom":"Montgolfier","lat":44.8523911,"lon":-0.5782869,"nb_inscrits":4339,"nb_votants":1592,"nb_exprimes":1575,"participation":36.7,"hurmic":554,"hurmic_pct":35.2,"florian":572,"florian_pct":36.3,"poutou":151,"poutou_pct":9.6,"paluteau":31,"paluteau_pct":2.0},{"nom":"Paul-Bert","lat":44.836186,"lon":-0.5743828,"nb_inscrits":3146,"nb_votants":1146,"nb_exprimes":1130,"participation":36.4,"hurmic":521,"hurmic_pct":46.1,"florian":245,"florian_pct":21.7,"poutou":198,"poutou_pct":17.5,"paluteau":26,"paluteau_pct":2.3},{"nom":"Paul Lapie","lat":44.8515008,"lon":-0.6153998,"nb_inscrits":4359,"nb_votants":1636,"nb_exprimes":1602,"participation":37.5,"hurmic":402,"hurmic_pct":25.1,"florian":804,"florian_pct":50.2,"poutou":79,"poutou_pct":4.9,"paluteau":54,"paluteau_pct":3.4},{"nom":"Loucheur","lat":44.8225758,"lon":-0.6004163,"nb_inscrits":4885,"nb_votants":1763,"nb_exprimes":1740,"participation":36.1,"hurmic":630,"hurmic_pct":36.2,"florian":572,"florian_pct":32.9,"poutou":193,"poutou_pct":11.1,"paluteau":72,"paluteau_pct":4.1},{"nom":"Sablières - Deyries","lat":44.8263215,"lon":-0.5752182,"nb_inscrits":5149,"nb_votants":2127,"nb_exprimes":2093,"participation":41.3,"hurmic":889,"hurmic_pct":42.5,"florian":558,"florian_pct":26.7,"poutou":310,"poutou_pct":14.8,"paluteau":36,"paluteau_pct":1.7},{"nom":"André Meunier","lat":44.8302773,"lon":-0.564367,"nb_inscrits":4460,"nb_votants":1648,"nb_exprimes":1626,"participation":37.0,"hurmic":733,"hurmic_pct":45.1,"florian":255,"florian_pct":15.7,"poutou":393,"poutou_pct":24.2,"paluteau":43,"paluteau_pct":2.6},{"nom":"Albert Barraud","lat":44.8445927,"lon":-0.5867881,"nb_inscrits":6329,"nb_votants":2672,"nb_exprimes":2644,"participation":42.2,"hurmic":734,"hurmic_pct":27.8,"florian":1120,"florian_pct":42.4,"poutou":160,"poutou_pct":6.1,"paluteau":77,"paluteau_pct":2.9},{"nom":"Amédé Larieu","lat":44.8303685,"lon":-0.5817528,"nb_inscrits":0,"nb_votants":0,"nb_exprimes":884,"participation":0,"hurmic":356,"hurmic_pct":40.3,"florian":270,"florian_pct":30.5,"poutou":89,"poutou_pct":10.1,"paluteau":11,"paluteau_pct":1.2},{"nom":"Balguerie","lat":44.856463,"lon":-0.5698199,"nb_inscrits":0,"nb_votants":0,"nb_exprimes":1618,"participation":0,"hurmic":602,"hurmic_pct":37.2,"florian":521,"florian_pct":32.2,"poutou":186,"poutou_pct":11.5,"paluteau":43,"paluteau_pct":2.7},{"nom":"Benauge","lat":44.8458986,"lon":-0.545584,"nb_inscrits":3133,"nb_votants":990,"nb_exprimes":974,"participation":31.6,"hurmic":390,"hurmic_pct":40.0,"florian":218,"florian_pct":22.4,"poutou":157,"poutou_pct":16.1,"paluteau":53,"paluteau_pct":5.4},{"nom":"cazemajor","lat":44.8242879,"lon":-0.5693884,"nb_inscrits":3525,"nb_votants":1429,"nb_exprimes":1411,"participation":40.5,"hurmic":640,"hurmic_pct":45.4,"florian":315,"florian_pct":22.3,"poutou":258,"poutou_pct":18.3,"paluteau":34,"paluteau_pct":2.4},{"nom":"Louise Michel","lat":44.8735962,"lon":-0.5748355,"nb_inscrits":4230,"nb_votants":1431,"nb_exprimes":1408,"participation":33.8,"hurmic":400,"hurmic_pct":28.4,"florian":525,"florian_pct":37.3,"poutou":158,"poutou_pct":11.2,"paluteau":69,"paluteau_pct":4.9},{"nom":"Vaclav Havel","lat":44.8805291,"lon":-0.570761,"nb_inscrits":2740,"nb_votants":639,"nb_exprimes":626,"participation":23.3,"hurmic":200,"hurmic_pct":31.9,"florian":202,"florian_pct":32.3,"poutou":76,"poutou_pct":12.1,"paluteau":47,"paluteau_pct":7.5},{"nom":"Menuts","lat":44.832852,"lon":-0.5673531,"nb_inscrits":3971,"nb_votants":1497,"nb_exprimes":1479,"participation":37.7,"hurmic":680,"hurmic_pct":46.0,"florian":145,"florian_pct":9.8,"poutou":463,"poutou_pct":31.3,"paluteau":21,"paluteau_pct":1.4},{"nom":"Naujac","lat":44.8477438,"lon":-0.5850001,"nb_inscrits":3020,"nb_votants":1159,"nb_exprimes":1135,"participation":38.4,"hurmic":350,"hurmic_pct":30.8,"florian":450,"florian_pct":39.6,"poutou":91,"poutou_pct":8.0,"paluteau":26,"paluteau_pct":2.3},{"nom":"Flornoy","lat":44.8333041,"lon":-0.6099584,"nb_inscrits":0,"nb_votants":0,"nb_exprimes":1593,"participation":0,"hurmic":558,"hurmic_pct":35.0,"florian":538,"florian_pct":33.8,"poutou":136,"poutou_pct":8.5,"paluteau":42,"paluteau_pct":2.6},{"nom":"Aristide Sousa Mendes","lat":44.8638477,"lon":-0.570998,"nb_inscrits":2934,"nb_votants":860,"nb_exprimes":847,"participation":29.3,"hurmic":268,"hurmic_pct":31.6,"florian":303,"florian_pct":35.8,"poutou":116,"poutou_pct":13.7,"paluteau":36,"paluteau_pct":4.3},{"nom":"Francin","lat":44.8242842,"lon":-0.5610139,"nb_inscrits":3486,"nb_votants":1470,"nb_exprimes":1452,"participation":42.2,"hurmic":680,"hurmic_pct":46.8,"florian":304,"florian_pct":20.9,"poutou":268,"poutou_pct":18.5,"paluteau":33,"paluteau_pct":2.3},{"nom":"Vieux Bordeaux","lat":44.8416072,"lon":-0.5711997,"nb_inscrits":2502,"nb_votants":879,"nb_exprimes":864,"participation":35.1,"hurmic":343,"hurmic_pct":39.7,"florian":216,"florian_pct":25.0,"poutou":154,"poutou_pct":17.8,"paluteau":16,"paluteau_pct":1.9},{"nom":"Jacques Prévert","lat":44.8241666,"lon":-0.5861138,"nb_inscrits":2111,"nb_votants":931,"nb_exprimes":917,"participation":44.1,"hurmic":308,"hurmic_pct":33.6,"florian":354,"florian_pct":38.6,"poutou":91,"poutou_pct":9.9,"paluteau":22,"paluteau_pct":2.4},{"nom":"Paul Doumer","lat":44.856999,"lon":-0.6169929,"nb_inscrits":5356,"nb_votants":2011,"nb_exprimes":1987,"participation":37.5,"hurmic":439,"hurmic_pct":22.1,"florian":993,"florian_pct":50.0,"poutou":125,"poutou_pct":6.3,"paluteau":71,"paluteau_pct":3.6},{"nom":"Point du jour","lat":44.8801326,"lon":-0.549358,"nb_inscrits":2782,"nb_votants":750,"nb_exprimes":735,"participation":27.0,"hurmic":200,"hurmic_pct":27.2,"florian":254,"florian_pct":34.6,"poutou":93,"poutou_pct":12.7,"paluteau":94,"paluteau_pct":12.8},{"nom":"Saint Bruno","lat":44.837666,"lon":-0.5890398,"nb_inscrits":4819,"nb_votants":1949,"nb_exprimes":1932,"participation":40.4,"hurmic":628,"hurmic_pct":32.5,"florian":732,"florian_pct":37.9,"poutou":179,"poutou_pct":9.3,"paluteau":60,"paluteau_pct":3.1},{"nom":"Nuyens","lat":44.8443221,"lon":-0.5610305,"nb_inscrits":1704,"nb_votants":687,"nb_exprimes":669,"participation":40.3,"hurmic":248,"hurmic_pct":37.1,"florian":206,"florian_pct":30.8,"poutou":75,"poutou_pct":11.2,"paluteau":26,"paluteau_pct":3.9}];
+
+const config = {
+  hurmic:   { label:'Pierre Hurmic',   sub:'Union de la Gauche',        color1:'#dcfce7', color2:'#4ade80', color3:'#15803d', text:'#15803d' },
+  florian:  { label:'Nicolas Florian', sub:'Droite',                     color1:'#dbeafe', color2:'#60a5fa', color3:'#1d4ed8', text:'#1d4ed8' },
+  poutou:   { label:'Philippe Poutou', sub:'NPA / LFI',                  color1:'#fee2e2', color2:'#f87171', color3:'#b91c1c', text:'#b91c1c' },
+  paluteau: { label:'Bruno Paluteau',  sub:'Rassemblement National',     color1:'#e7e5e4', color2:'#78716c', color3:'#292524', text:'#44403c' },
+};
+
+const TCOL = {
+  hurmic:   { light:'#bbf7d0', mid:'#4ade80', dark:'#15803d', text:'#14532d' },
+  florian:  { light:'#bfdbfe', mid:'#60a5fa', dark:'#1d4ed8', text:'#1e3a8a' },
+  poutou:   { light:'#fecaca', mid:'#f87171', dark:'#b91c1c', text:'#7f1d1d' },
+  paluteau: { light:'#e7e5e4', mid:'#78716c', dark:'#292524', text:'#1c1917' },
+};
+
+function getWinner(bu) {
+  var scores = { hurmic:bu.hurmic_pct, florian:bu.florian_pct, poutou:bu.poutou_pct, paluteau:bu.paluteau_pct };
+  var sorted = Object.keys(scores).map(function(k){ return [k, scores[k]]; }).sort(function(a,z){ return z[1]-a[1]; });
+  return { winner:sorted[0][0], score:sorted[0][1], margin:sorted[0][1]-sorted[1][1], all:sorted };
+}
+
+function lerpColor(c1, c2, t) {
+  function h2r(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
+  var r1=h2r(c1), r2=h2r(c2);
+  return 'rgb('+Math.round(r1[0]+(r2[0]-r1[0])*t)+','+Math.round(r1[1]+(r2[1]-r1[1])*t)+','+Math.round(r1[2]+(r2[2]-r1[2])*t)+')';
+}
+
+function territoireColor(bu) {
+  var res = getWinner(bu), c = TCOL[res.winner], t = Math.min(1, res.margin / 30);
+  return t < 0.5 ? lerpColor(c.light, c.mid, t/0.5) : lerpColor(c.mid, c.dark, (t-0.5)/0.5);
+}
+
+const maxPct = {};
+Object.keys(config).forEach(k => { maxPct[k] = Math.max(...bureaux.map(b => b[k+'_pct'])); });
+
+function hexToRgb(h) { return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
+
+function scoreToColor(pct, cand) {
+  const c = config[cand];
+  const t = Math.min(1, pct / maxPct[cand]);
+  const [r1,g1,b1]=hexToRgb(c.color1), [r2,g2,b2]=hexToRgb(c.color2), [r3,g3,b3]=hexToRgb(c.color3);
+  let r,g,b;
+  if (t<0.5){const u=t/0.5;r=Math.round(r1+(r2-r1)*u);g=Math.round(g1+(g2-g1)*u);b=Math.round(b1+(b2-b1)*u);}
+  else{const u=(t-0.5)/0.5;r=Math.round(r2+(r3-r2)*u);g=Math.round(g2+(g3-g2)*u);b=Math.round(b2+(b3-b2)*u);}
+  return `rgb(${r},${g},${b})`;
+}
+
+let currentCand = 'hurmic';
+let markers = [];
+
+const map = L.map('map', { center:[44.848,-0.582], zoom:13, zoomControl:true });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution:'© OpenStreetMap © CARTO', subdomains:'abcd', maxZoom:19
+}).addTo(map);
+
+function updateLegend(cand) {
+  const c = config[cand];
+  document.getElementById('legend-title').textContent = '% ' + c.label.split(' ')[1];
+  document.getElementById('legend-gradient').style.background = `linear-gradient(to right,${c.color1},${c.color2},${c.color3})`;
+  document.getElementById('leg-max').textContent = maxPct[cand] + ' %';
+}
+
+function updateInfoPanel(b) {
+  const panel = document.getElementById('info-panel');
+  if (!b) { panel.innerHTML=`<div class="info-panel-title">Centre de vote</div><div class="info-placeholder">Survolez un point</div>`; return; }
+
+  const rows = Object.keys(config).map(k=>({key:k,label:config[k].label.split(' ')[1],pct:b[k+'_pct'],votes:b[k]}))
+    .sort((a,z)=>z.pct-a.pct);
+
+  const part = b.participation > 0
+    ? `<div class="info-stat"><span>Participation</span><strong>${b.participation}%</strong></div>`
+    : `<div class="info-stat"><span>Participation</span><strong>n.d.</strong></div>`;
+
+  panel.innerHTML = `
+    <div class="info-panel-title">${b.nom}</div>
+    ${rows.map(r=>`
+      <div class="info-cand-row">
+        <div class="info-cand-name">${r.label}</div>
+        <div class="info-cand-bar-wrap"><div class="info-cand-bar" style="width:${r.pct}%;background:${config[r.key].color3}"></div></div>
+        <div class="info-cand-pct" style="color:${config[r.key].text}">${r.pct}%</div>
+      </div>`).join('')}
+    <hr class="info-divider">
+    ${part}
+    <div class="info-stat"><span>Exprimés</span><strong>${b.nb_exprimes.toLocaleString('fr')}</strong></div>
+  `;
+}
+
+const maxExp = Math.max(...bureaux.map(bx => bx.nb_exprimes));
+
+function updateInfoPanelTerritory(bu) {
+  const panel = document.getElementById('info-panel');
+  var res = getWinner(bu);
+  var wc = TCOL[res.winner];
+  var wLabel = config[res.winner].label.split(' ')[1];
+  var rows = res.all.map(function(entry) {
+    var key=entry[0], pct=entry[1], c=TCOL[key], name=config[key].label.split(' ')[1];
+    return '<div class="info-cand-row">'
+      +'<div style="width:8px;height:8px;border-radius:50%;background:'+c.dark+';flex-shrink:0"></div>'
+      +'<div class="info-cand-name">'+name+'</div>'
+      +'<div class="info-cand-bar-wrap"><div class="info-cand-bar" style="width:'+pct+'%;background:'+c.dark+'"></div></div>'
+      +'<div class="info-cand-pct" style="color:'+c.text+'">'+pct+'%</div>'
+      +'</div>';
+  }).join('');
+  var part = bu.participation > 0
+    ? '<div class="info-stat"><span>Participation</span><strong>'+bu.participation+'%</strong></div>'
+    : '<div class="info-stat"><span>Participation</span><strong>n.d.</strong></div>';
+  panel.innerHTML = '<div class="info-panel-title">'+bu.nom+'</div>'
+    +'<div style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:0.72rem;font-weight:600;margin-bottom:8px;background:'+wc.light+';color:'+wc.text+';border:1.5px solid '+wc.mid+'">'
+    +'<span style="width:8px;height:8px;border-radius:50%;background:'+wc.dark+';display:inline-block"></span>'
+    +'En tête : '+wLabel+' · '+res.score+'%</div>'
+    +'<div style="font-size:0.65rem;color:#a8a29e;margin-bottom:8px">Marge : +'+res.margin.toFixed(1)+' pts</div>'
+    +rows
+    +'<hr class="info-divider">'+part
+    +'<div class="info-stat"><span>Exprimés</span><strong>'+bu.nb_exprimes.toLocaleString('fr')+'</strong></div>';
+}
+
+function drawMarkers(cand) {
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+
+  if (cand === 'territoires') {
+    document.getElementById('legend-box').style.display = 'none';
+    bureaux.forEach(bu => {
+      var res = getWinner(bu);
+      var color = territoireColor(bu);
+      var radius = 10 + (bu.nb_exprimes / maxExp) * 12;
+      var circle = L.circleMarker([bu.lat,bu.lon], { radius, fillColor:color, fillOpacity:0.9, color:'#fff', weight:1.8 }).addTo(map);
+      circle.bindTooltip('<strong>'+bu.nom+'</strong><br>'+config[res.winner].label.split(' ')[1]+' · '+res.score+'% <span style="color:#a8a29e">(+'+res.margin.toFixed(1)+' pts)</span>', {className:'ctip',direction:'top',offset:[0,-radius-2]});
+      circle.on('mouseover', function(){ this.setStyle({weight:2.5,color:'#333'}); updateInfoPanelTerritory(bu); });
+      circle.on('mouseout',  function(){ this.setStyle({weight:1.8,color:'#fff'}); updateInfoPanel(null); });
+      markers.push(circle);
+    });
+    return;
+  }
+
+  document.getElementById('legend-box').style.display = '';
+  bureaux.forEach(b => {
+    const pct = b[cand+'_pct'];
+    const color = scoreToColor(pct, cand);
+    const radius = 8 + (pct / maxPct[cand]) * 11;
+    const circle = L.circleMarker([b.lat,b.lon], {
+      radius, fillColor:color, fillOpacity:0.88, color:'#fff', weight:1.5
+    }).addTo(map);
+    circle.bindTooltip(`<strong>${b.nom}</strong>&nbsp; ${pct}%`, {className:'ctip',direction:'top',offset:[0,-radius-2]});
+    circle.on('mouseover', function(){ this.setStyle({weight:2.5,color:'#333'}); updateInfoPanel(b); });
+    circle.on('mouseout',  function(){ this.setStyle({weight:1.5,color:'#fff'}); updateInfoPanel(null); });
+    markers.push(circle);
+  });
+  updateLegend(cand);
+}
+
+document.querySelectorAll('.cand-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.cand-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentCand = btn.dataset.cand;
+    drawMarkers(currentCand);
+  });
+});
+
+drawMarkers('hurmic');
+});
+</script>
+</body>
+</html>
